@@ -1657,7 +1657,7 @@ public class HTTPServer {
             if (!headers.contains("Date"))
                 headers.add("Date", formatDate(System.currentTimeMillis()));
             headers.add("Server", "JLHTTP/2.2");
-            out.write(getBytes("HTTP/1.1 ", Integer.toString(status), " ", statuses[status]));
+            out.write(getBytes("HTTP/1.1 ", String.format("%03d",status), " ", statuses[status]));
             out.write(CRLF);
             headers.writeTo(out);
             state = 1; // headers sent
