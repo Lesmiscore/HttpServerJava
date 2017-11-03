@@ -1297,7 +1297,7 @@ public class HTTPServer {
     public class Request {
 
         protected String method;
-        protected URI uri;
+        protected URI uri, rawUri;
         protected URL baseURL; // cached value
         protected String version;
         protected Headers headers;
@@ -1345,6 +1345,13 @@ public class HTTPServer {
          * @return the request URI
          */
         public URI getURI() { return uri; }
+        
+        /**
+         * Returns the request URI.
+         *
+         * @return the request URI
+         */
+        public URI getRawUri() { return rawUri; }
 
         /**
          * Returns the request version string.
@@ -1438,7 +1445,7 @@ public class HTTPServer {
          * @see HTTPServer#parseParamsList(String)
          */
         public List<String[]> getParamsList() throws IOException {
-            List<String[]> queryParams = parseParamsList(uri.getRawQuery());
+            List<String[]> queryParams = parseParamsList(rawUri.getRawQuery());
             List<String[]> bodyParams = Collections.emptyList();
             String ct = headers.get("Content-Type");
             if (ct != null && ct.toLowerCase(Locale.US).startsWith("application/x-www-form-urlencoded"))
@@ -1510,7 +1517,7 @@ public class HTTPServer {
             try {
                 method = tokens[0];
                 // must remove '//' prefix which constructor parses as host name
-                uri = new URI(trimDuplicates(tokens[1], '/'));
+                uri = rawUri = new URI(trimDuplicates(tokens[1], '/'));
                 version = tokens[2]; // RFC2616#2.1: allow implied LWS; RFC7230#3.1.1: disallow it
             } catch (URISyntaxException use) {
                 throw new IOException("invalid URI: " + use.getMessage());
