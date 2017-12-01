@@ -1536,6 +1536,15 @@ public class HTTPServer {
             VirtualHost host = HTTPServer.this.getVirtualHost(name);
             return host != null ? host : HTTPServer.this.getVirtualHost(null);
         }
+        
+        /**
+         * Returns the InputStream containing body
+         *
+         * @return the InputStream containing body
+         */
+        public InputStream getBody() {
+            return body;
+        } 
     }
 
     /**
