@@ -21,9 +21,15 @@
 
 package net.freeutils.httpserver;
 
+import javax.net.ServerSocketFactory;
+import javax.net.ssl.SSLServerSocketFactory;
 import java.io.*;
-import java.lang.annotation.*;
-import java.lang.reflect.*;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -31,8 +37,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.GZIPOutputStream;
-import javax.net.ServerSocketFactory;
-import javax.net.ssl.SSLServerSocketFactory;
 
 /**
  * The {@code HTTPServer} class implements a light-weight HTTP server.
@@ -1304,13 +1308,16 @@ public class HTTPServer {
         protected InputStream body;
         protected Map<String, String> params; // cached value
 
+        protected InetAddress origin;
+
         /**
          * Constructs a Request from the data in the given input stream.
          *
-         * @param in the input stream from which the request is read
+         * @param in     the input stream from which the request is read
+         * @param origin
          * @throws IOException if an error occurs
          */
-        public Request(InputStream in) throws IOException {
+        public Request(InputStream in, InetAddress origin) throws IOException {
             readRequestLine(in);
             headers = readHeaders(in);
             // RFC2616#3.6 - if "chunked" is used, it must be the last one
@@ -1330,6 +1337,8 @@ public class HTTPServer {
                 long len = header == null ? 0 : parseULong(header, 10);
                 body = new LimitedInputStream(in, len, false);
             }
+
+            this.origin = origin;
         }
 
         /**
@@ -1535,6 +1544,15 @@ public class HTTPServer {
             String name = getBaseURL().getHost();
             VirtualHost host = HTTPServer.this.getVirtualHost(name);
             return host != null ? host : HTTPServer.this.getVirtualHost(null);
+        }
+
+        /**
+         * Returns the client address
+         *
+         * @return the client address
+         */
+        public InetAddress getOrigin() {
+            return origin;
         }
     }
 
@@ -1848,7 +1866,7 @@ public class HTTPServer {
                             try {
                                 sock.setSoTimeout(socketTimeout);
                                 sock.setTcpNoDelay(true); // we buffer anyway, so improve latency
-                                handleConnection(sock.getInputStream(), sock.getOutputStream());
+                                handleConnection(sock.getInputStream(), sock.getOutputStream(), sock.getInetAddress());
                             } finally {
                                 try {
                                     // RFC7230#6.6 - close socket gracefully
@@ -2023,11 +2041,12 @@ public class HTTPServer {
      * contains a "Connection: close" header which explicitly requests
      * the connection be closed after the transaction ends.
      *
-     * @param in the stream from which the incoming requests are read
-     * @param out the stream into which the outgoing responses are written
+     * @param in     the stream from which the incoming requests are read
+     * @param out    the stream into which the outgoing responses are written
+     * @param origin
      * @throws IOException if an error occurs
      */
-    protected void handleConnection(InputStream in, OutputStream out) throws IOException {
+    protected void handleConnection(InputStream in, OutputStream out, InetAddress origin) throws IOException {
         in = new BufferedInputStream(in, 4096);
         out = new BufferedOutputStream(out, 4096);
         Request req;
@@ -2037,7 +2056,7 @@ public class HTTPServer {
             req = null;
             resp = new Response(out);
             try {
-                req = new Request(in);
+                req = new Request(in, origin);
                 handleTransaction(req, resp);
             } catch (Throwable t) { // unhandled errors (not normal error responses like 404)
                 if (req == null) { // error reading request
