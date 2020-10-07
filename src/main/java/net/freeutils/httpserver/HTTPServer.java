@@ -1309,15 +1309,17 @@ public class HTTPServer {
         protected Map<String, String> params; // cached value
 
         protected InetAddress origin;
+        protected int port;
 
         /**
          * Constructs a Request from the data in the given input stream.
          *
          * @param in     the input stream from which the request is read
          * @param origin
+         * @param port
          * @throws IOException if an error occurs
          */
-        public Request(InputStream in, InetAddress origin) throws IOException {
+        public Request(InputStream in, InetAddress origin, int port) throws IOException {
             readRequestLine(in);
             headers = readHeaders(in);
             // RFC2616#3.6 - if "chunked" is used, it must be the last one
@@ -1339,6 +1341,7 @@ public class HTTPServer {
             }
 
             this.origin = origin;
+            this.port = port;
         }
 
         /**
@@ -1374,14 +1377,37 @@ public class HTTPServer {
          *
          * @return the request headers
          */
-        public Headers getHeaders() { return headers; }
+        public Headers getHeaders() {
+            return headers;
+        }
 
         /**
          * Returns the input stream containing the request body.
          *
          * @return the input stream containing the request body
          */
-        public InputStream getBody() { return body; }
+        public InputStream getBody() {
+            return body;
+        }
+
+
+        /**
+         * Returns the client address
+         *
+         * @return the client address
+         */
+        public InetAddress getOrigin() {
+            return origin;
+        }
+
+        /**
+         * Returns the origin port
+         *
+         * @return the origin port
+         */
+        public int getPort() {
+            return port;
+        }
 
         /**
          * Returns the path component of the request URI, after
@@ -1544,15 +1570,6 @@ public class HTTPServer {
             String name = getBaseURL().getHost();
             VirtualHost host = HTTPServer.this.getVirtualHost(name);
             return host != null ? host : HTTPServer.this.getVirtualHost(null);
-        }
-
-        /**
-         * Returns the client address
-         *
-         * @return the client address
-         */
-        public InetAddress getOrigin() {
-            return origin;
         }
     }
 
@@ -1866,7 +1883,7 @@ public class HTTPServer {
                             try {
                                 sock.setSoTimeout(socketTimeout);
                                 sock.setTcpNoDelay(true); // we buffer anyway, so improve latency
-                                handleConnection(sock.getInputStream(), sock.getOutputStream(), sock.getInetAddress());
+                                handleConnection(sock.getInputStream(), sock.getOutputStream(), sock.getInetAddress(), sock.getPort());
                             } finally {
                                 try {
                                     // RFC7230#6.6 - close socket gracefully
@@ -2046,7 +2063,7 @@ public class HTTPServer {
      * @param origin
      * @throws IOException if an error occurs
      */
-    protected void handleConnection(InputStream in, OutputStream out, InetAddress origin) throws IOException {
+    protected void handleConnection(InputStream in, OutputStream out, InetAddress origin, int originPort) throws IOException {
         in = new BufferedInputStream(in, 4096);
         out = new BufferedOutputStream(out, 4096);
         Request req;
@@ -2056,7 +2073,7 @@ public class HTTPServer {
             req = null;
             resp = new Response(out);
             try {
-                req = new Request(in, origin);
+                req = new Request(in, origin, originPort);
                 handleTransaction(req, resp);
             } catch (Throwable t) { // unhandled errors (not normal error responses like 404)
                 if (req == null) { // error reading request
